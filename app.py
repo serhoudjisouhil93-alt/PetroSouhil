@@ -2,116 +2,1278 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.interpolate import griddata
+import matplotlib.colors as mcolors
+from matplotlib import cm
+from scipy.interpolate import griddata, RBFInterpolator
 import plotly.graph_objects as go
-import lasio
+import plotly.express as px
+from plotly.subplots import make_subplots
 import io
-from fpdf import FPDF
 
-# --- 1. App Configuration ---
-st.set_page_config(page_title="PetroStream Ultra 2.0 | Serhoudji Souhil", layout="wide")
-
-# --- 2. Professional CSS ---
-st.markdown("""
-    <style>
-    .main { background-color: #0e1117; color: white; }
-    [data-testid="stMetricValue"] { color: #004c6d !important; }
-    [data-testid="stMetricLabel"] { color: #31333F !important; font-weight: bold; }
-    div[data-testid="stMetric"] {
-        background-color: #ffffff;
-        border-radius: 10px;
-        padding: 15px;
-        border-left: 5px solid #d4a017;
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.5);
-    }
-    h1, h2, h3 { color: #ffffff; font-family: 'Segoe UI'; }
-    .stHeader { border-bottom: 2px solid #d4a017; }
-    </style>
-    """, unsafe_allow_html=True)
-
-# --- 3. Dataset Engine ---
-@st.cache_data
-def load_v14_data():
-    data = {
-        'Well': ['SBAA-1', 'DECH-1', 'OTLA-1', 'BDW-1', 'ODZ-1', 'OTRT-1', 'LT-1bis', 'MGR-1'],
-        'X': [7.5, 6.5, 1.8, 6.2, 5.8, 4.2, 2.0, 5.9], 
-        'Y': [5.5, 7.5, 1.2, 6.1, 5.0, 4.3, 2.1, 4.8],
-        'Thickness': [70, 68, 54, 48, 185, 188, 173, 253],
-        'COT': [1.44, 2.65, 1.49, 0.57, 5.74, 0.97, 0.61, 0.71],
-        'S2': [4.39, 16.04, 6.91, 2.04, 4.06, 0.79, 0.43, 1.88],
-        'Tmax': [446, 440, 437, 460, 445, 452, 443, 454],
-        'IH': [315, 484, 467, 404, 292, 93, 53, 128],
-        'IO': [19, 26, 33, 24, 46, 13, 48, 22]
-    }
-    df = pd.DataFrame(data)
-    df['Ro_calc'] = ((0.018 * df['Tmax']) - 7.16).round(2)
-    return df
-
-df = load_v14_data()
-
-# --- 4. PDF Report Generator Function ---
-def create_pdf(dataframe):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(200, 10, txt="PetroStream Ultra 2.0 - Basin Report", ln=True, align='C')
-    pdf.set_font("Arial", size=10)
-    pdf.cell(200, 10, txt=f"Lead Developer: Serhoudji Souhil", ln=True, align='C')
-    pdf.ln(10)
-    
-    # Add Table Header
-    pdf.set_font("Arial", 'B', 8)
-    cols = ['Well', 'Thickness', 'COT', 'Tmax', 'Ro_calc']
-    for col in cols:
-        pdf.cell(35, 10, col, 1)
-    pdf.ln()
-    
-    # Add Data
-    pdf.set_font("Arial", size=8)
-    for index, row in dataframe.iterrows():
-        for col in cols:
-            pdf.cell(35, 10, str(row[col]), 1)
-        pdf.ln()
-    
-    return pdf.output(dest='S').encode('latin-1')
-
-# --- 5. Sidebar Branding & Export ---
-st.sidebar.title("PetroStream Ultra 2.0")
-st.sidebar.subheader("Serhoudji Souhil")
-st.sidebar.markdown("*Master's Student | Petroleum Geology*")
-st.sidebar.markdown("---")
-
-menu = st.sidebar.radio("Project Hub", 
-    ["Home: Project Overview", "Basin Registry", "Geochemical Analytics", "3D Mapping", "Log Viewer"])
-
-# PDF Export Button
-st.sidebar.markdown("### 📄 Reporting")
-pdf_data = create_pdf(df)
-st.sidebar.download_button(
-    label="Download Basin PDF Report",
-    data=pdf_data,
-    file_name="SBAA_Basin_Report.pdf",
-    mime="application/pdf"
+# ═══════════════════════════════════════════════════════════════
+#  APP CONFIGURATION
+# ═══════════════════════════════════════════════════════════════
+st.set_page_config(
+    page_title="PetroStream Ultra 2.0",
+    page_icon="⛽",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# --- 6. Modules ---
-if menu == "Home: Project Overview":
-    st.title("Project Overview: SBAA Basin Analysis")
-    st.header("1. Abstract")
-    st.write("""
-    Characterization of the **Upper Devonian source rock** within the **SBAA Basin** using integrated 
-    Rock-Eval and stratigraphic data. Lead Developer: **Serhoudji Souhil**.
-    """)
-    st.header("2. Methodology")
-    st.info("Utilizing Jarvie (2007) maturity modeling and Cubic Spline interpolation.")
+# ═══════════════════════════════════════════════════════════════
+#  MASTER CSS — Petroleum Dark Luxury Theme
+# ═══════════════════════════════════════════════════════════════
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Barlow+Condensed:wght@200;300;400;500;600;700;800&display=swap');
 
+:root {
+    --bg-void:       #04080f;
+    --bg-deep:       #080e1a;
+    --bg-panel:      #0c1424;
+    --bg-card:       #101828;
+    --bg-raised:     #151e2e;
+    --gold-bright:   #f0c040;
+    --gold-mid:      #c8982a;
+    --gold-dim:      #8a6510;
+    --amber:         #ff8c00;
+    --amber-dim:     #8a4a00;
+    --teal:          #00d4aa;
+    --teal-dim:      #005a46;
+    --red-warn:      #ff4444;
+    --blue-data:     #4499ff;
+    --text-primary:  #e8eaf0;
+    --text-secondary:#8a9ab5;
+    --text-muted:    #3d4f6a;
+    --border-subtle: #1a2540;
+    --border-active: #2a3f60;
+    --glow-gold:     0 0 20px rgba(240,192,64,0.3);
+    --glow-teal:     0 0 20px rgba(0,212,170,0.3);
+}
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, .stApp {
+    background-color: var(--bg-void) !important;
+    font-family: 'Barlow Condensed', sans-serif !important;
+    color: var(--text-primary) !important;
+}
+
+/* ── Animated grain overlay ── */
+.stApp::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.4;
+}
+
+/* ── Sidebar ── */
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #060b14 0%, #04080f 100%) !important;
+    border-right: 1px solid var(--border-subtle) !important;
+    box-shadow: 4px 0 40px rgba(0,0,0,0.8) !important;
+}
+
+section[data-testid="stSidebar"] > div { padding-top: 0 !important; }
+
+/* ── Sidebar logo block ── */
+.sidebar-logo {
+    background: linear-gradient(135deg, #0a1520 0%, #0d1a2a 100%);
+    border-bottom: 1px solid var(--gold-dim);
+    padding: 24px 20px 20px;
+    margin-bottom: 8px;
+    position: relative;
+    overflow: hidden;
+}
+.sidebar-logo::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -20px;
+    width: 120px;
+    height: 200%;
+    background: linear-gradient(90deg, transparent, rgba(240,192,64,0.04), transparent);
+    transform: skewX(-15deg);
+    animation: shimmer 4s infinite;
+}
+@keyframes shimmer {
+    0%   { right: -20px; opacity: 0; }
+    50%  { opacity: 1; }
+    100% { right: 110%; opacity: 0; }
+}
+.logo-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: 1.35rem;
+    letter-spacing: 0.15em;
+    color: var(--gold-bright);
+    text-transform: uppercase;
+    line-height: 1.2;
+    text-shadow: var(--glow-gold);
+}
+.logo-version {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--teal);
+    letter-spacing: 0.25em;
+    margin-top: 4px;
+}
+.logo-author {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    letter-spacing: 0.08em;
+    font-weight: 300;
+}
+
+/* ── Nav radio ── */
+div[data-testid="stRadio"] > label {
+    display: none !important;
+}
+div[data-testid="stRadio"] > div {
+    gap: 2px !important;
+}
+div[data-testid="stRadio"] > div > label {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 4px !important;
+    padding: 10px 16px !important;
+    font-family: 'Barlow Condensed', sans-serif !important;
+    font-size: 0.9rem !important;
+    letter-spacing: 0.06em !important;
+    color: var(--text-secondary) !important;
+    cursor: pointer !important;
+    transition: all 0.2s !important;
+    border-left: 2px solid transparent !important;
+}
+div[data-testid="stRadio"] > div > label:hover {
+    background: rgba(240,192,64,0.06) !important;
+    color: var(--text-primary) !important;
+    border-left-color: var(--gold-dim) !important;
+}
+div[data-testid="stRadio"] > div > label[data-checked="true"],
+div[data-testid="stRadio"] > div > label[aria-checked="true"] {
+    background: linear-gradient(90deg, rgba(240,192,64,0.12), transparent) !important;
+    color: var(--gold-bright) !important;
+    border-left-color: var(--gold-bright) !important;
+    font-weight: 600 !important;
+}
+
+/* ── Main content ── */
+.main .block-container {
+    padding: 2rem 2.5rem !important;
+    max-width: 1600px !important;
+}
+
+/* ── Page header ── */
+.page-header {
+    display: flex;
+    align-items: flex-end;
+    gap: 20px;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-subtle);
+    position: relative;
+}
+.page-header::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 80px;
+    height: 2px;
+    background: var(--gold-bright);
+    box-shadow: var(--glow-gold);
+}
+.page-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: 2.2rem;
+    letter-spacing: 0.12em;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    line-height: 1;
+}
+.page-subtitle {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    font-weight: 300;
+}
+
+/* ── KPI Cards ── */
+div[data-testid="stMetric"] {
+    background: linear-gradient(135deg, var(--bg-card), var(--bg-raised)) !important;
+    border: 1px solid var(--border-subtle) !important;
+    border-top: 2px solid var(--gold-mid) !important;
+    border-radius: 6px !important;
+    padding: 18px 20px !important;
+    position: relative !important;
+    overflow: hidden !important;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5) !important;
+    transition: transform 0.2s, box-shadow 0.2s !important;
+}
+div[data-testid="stMetric"]:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6), var(--glow-gold) !important;
+}
+div[data-testid="stMetric"]::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 60px; height: 60px;
+    background: radial-gradient(circle at top right, rgba(240,192,64,0.08), transparent 70%);
+}
+[data-testid="stMetricValue"] {
+    font-family: 'Rajdhani', sans-serif !important;
+    font-size: 2rem !important;
+    font-weight: 700 !important;
+    color: var(--gold-bright) !important;
+    letter-spacing: 0.05em !important;
+}
+[data-testid="stMetricLabel"] {
+    font-size: 0.7rem !important;
+    color: var(--text-secondary) !important;
+    letter-spacing: 0.15em !important;
+    text-transform: uppercase !important;
+    font-weight: 400 !important;
+}
+
+/* ── Section header ── */
+.section-header {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin: 2rem 0 1rem;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.section-header::before {
+    content: '';
+    width: 4px;
+    height: 16px;
+    background: var(--gold-bright);
+    border-radius: 2px;
+    box-shadow: var(--glow-gold);
+}
+
+/* ── Data table ── */
+.stDataFrame {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-subtle) !important;
+    border-radius: 6px !important;
+    overflow: hidden !important;
+}
+.stDataFrame thead th {
+    background: var(--bg-deep) !important;
+    color: var(--gold-mid) !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    font-size: 0.7rem !important;
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase !important;
+    border-bottom: 1px solid var(--border-active) !important;
+    padding: 10px 14px !important;
+}
+.stDataFrame tbody tr { border-bottom: 1px solid var(--border-subtle) !important; }
+.stDataFrame tbody tr:hover { background: rgba(240,192,64,0.04) !important; }
+.stDataFrame tbody td {
+    font-family: 'Share Tech Mono', monospace !important;
+    font-size: 0.8rem !important;
+    color: var(--text-primary) !important;
+    padding: 8px 14px !important;
+}
+
+/* ── Info/warning boxes ── */
+div[data-testid="stInfo"], .stAlert {
+    background: rgba(0,212,170,0.06) !important;
+    border: 1px solid var(--teal-dim) !important;
+    border-left: 3px solid var(--teal) !important;
+    border-radius: 4px !important;
+    color: var(--text-primary) !important;
+}
+
+/* ── Plotly charts container ── */
+.js-plotly-plot { border-radius: 6px; }
+
+/* ── Download button ── */
+.stDownloadButton > button {
+    background: linear-gradient(135deg, var(--gold-dim), var(--gold-mid)) !important;
+    color: #000 !important;
+    border: none !important;
+    border-radius: 4px !important;
+    font-family: 'Barlow Condensed', sans-serif !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase !important;
+    font-size: 0.8rem !important;
+    padding: 8px 18px !important;
+    transition: all 0.2s !important;
+    width: 100% !important;
+}
+.stDownloadButton > button:hover {
+    background: linear-gradient(135deg, var(--gold-mid), var(--gold-bright)) !important;
+    box-shadow: var(--glow-gold) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* ── Select boxes, sliders ── */
+.stSelectbox > div > div,
+.stMultiSelect > div > div {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-active) !important;
+    border-radius: 4px !important;
+    color: var(--text-primary) !important;
+}
+.stSlider > div > div > div { background: var(--gold-mid) !important; }
+
+/* ── Expander ── */
+.streamlit-expanderHeader {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-subtle) !important;
+    border-radius: 4px !important;
+    font-family: 'Barlow Condensed', sans-serif !important;
+    color: var(--text-secondary) !important;
+    letter-spacing: 0.08em !important;
+}
+
+/* ── Status badge ── */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-family: 'Share Tech Mono', monospace;
+}
+.badge-active  { background: rgba(0,212,170,0.12); color: var(--teal); border: 1px solid var(--teal-dim); }
+.badge-warn    { background: rgba(255,140,0,0.12);  color: var(--amber); border: 1px solid var(--amber-dim); }
+.badge-danger  { background: rgba(255,68,68,0.12);  color: var(--red-warn); border: 1px solid #5a1a1a; }
+
+/* ── Maturity indicator ── */
+.maturity-bar-wrap { margin: 6px 0; }
+.maturity-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--bg-raised);
+    overflow: hidden;
+    position: relative;
+}
+.maturity-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 1s ease;
+}
+
+/* ── Tabs ── */
+.stTabs [data-baseweb="tab-list"] {
+    background: transparent !important;
+    border-bottom: 1px solid var(--border-subtle) !important;
+    gap: 0 !important;
+}
+.stTabs [data-baseweb="tab"] {
+    background: transparent !important;
+    color: var(--text-muted) !important;
+    font-family: 'Barlow Condensed', sans-serif !important;
+    font-size: 0.85rem !important;
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase !important;
+    border-radius: 0 !important;
+    padding: 10px 20px !important;
+    border-bottom: 2px solid transparent !important;
+    transition: all 0.2s !important;
+}
+.stTabs [aria-selected="true"] {
+    color: var(--gold-bright) !important;
+    border-bottom-color: var(--gold-bright) !important;
+}
+
+/* ── Well card ── */
+.well-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 16px;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+.well-card:hover {
+    border-color: var(--border-active);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4), var(--glow-gold);
+    transform: translateY(-2px);
+}
+.well-card .well-name {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--gold-bright);
+    letter-spacing: 0.1em;
+}
+.well-card .well-stat {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+.well-card .well-highlight {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--teal);
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--border-active); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gold-dim); }
+
+/* ── Divider ── */
+hr { border-color: var(--border-subtle) !important; margin: 1.5rem 0 !important; }
+
+/* ── h1/h2/h3 ── */
+h1 { font-family: 'Rajdhani', sans-serif !important; font-weight: 700 !important; }
+h2 { font-family: 'Barlow Condensed', sans-serif !important; font-weight: 600 !important; color: var(--text-secondary) !important; }
+h3 { font-family: 'Barlow Condensed', sans-serif !important; color: var(--text-secondary) !important; }
+
+p, li { font-family: 'Barlow Condensed', sans-serif !important; font-size: 1rem !important; line-height: 1.6 !important; }
+
+/* ── Sidebar section labels ── */
+.sidebar-section {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    padding: 16px 16px 6px;
+    border-top: 1px solid var(--border-subtle);
+    margin-top: 8px;
+}
+
+/* ── Plotly config (dark bg) ── */
+.plotly-graph-div { background: transparent !important; }
+</style>
+""", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  PLOTLY THEME CONFIG
+# ═══════════════════════════════════════════════════════════════
+PLOTLY_TEMPLATE = dict(
+    layout=dict(
+        paper_bgcolor='#0c1424',
+        plot_bgcolor='#080e1a',
+        font=dict(family='Barlow Condensed, Share Tech Mono', color='#8a9ab5', size=12),
+        title=dict(font=dict(family='Rajdhani', size=16, color='#e8eaf0'), x=0.02),
+        xaxis=dict(
+            gridcolor='#1a2540', gridwidth=0.5,
+            linecolor='#1a2540', zerolinecolor='#2a3f60',
+            tickfont=dict(family='Share Tech Mono', size=10, color='#8a9ab5'),
+        ),
+        yaxis=dict(
+            gridcolor='#1a2540', gridwidth=0.5,
+            linecolor='#1a2540', zerolinecolor='#2a3f60',
+            tickfont=dict(family='Share Tech Mono', size=10, color='#8a9ab5'),
+        ),
+        legend=dict(
+            bgcolor='rgba(8,14,26,0.85)',
+            bordercolor='#1a2540', borderwidth=1,
+            font=dict(family='Barlow Condensed', size=11, color='#8a9ab5'),
+        ),
+        margin=dict(l=50, r=30, t=50, b=50),
+        colorway=['#f0c040','#00d4aa','#4499ff','#ff8c00','#ff4444','#aa66ff','#44ffcc','#ffcc44'],
+    )
+)
+
+GOLD_SEQ   = ['#04080f','#1a2a00','#3a5000','#6a7800','#a09000','#c8a020','#f0c040','#ffd870']
+TEAL_SEQ   = ['#04080f','#001a14','#003a2a','#006a50','#009a76','#00c49a','#00d4aa','#66ffe0']
+
+
+# ═══════════════════════════════════════════════════════════════
+#  DATA ENGINE
+# ═══════════════════════════════════════════════════════════════
+@st.cache_data
+def load_data():
+    data = {
+        'Well':      ['SBAA-1','DECH-1','OTLA-1','BDW-1','ODZ-1','OTRT-1','LT-1bis','MGR-1'],
+        'X':         [7.5, 6.5, 1.8, 6.2, 5.8, 4.2, 2.0, 5.9],
+        'Y':         [5.5, 7.5, 1.2, 6.1, 5.0, 4.3, 2.1, 4.8],
+        'Thickness': [70,  68,  54,  48,  185, 188, 173, 253],
+        'TOC':       [1.44,2.65,1.49,0.57,5.74,0.97,0.61,0.71],
+        'S2':        [4.39,16.04,6.91,2.04,4.06,0.79,0.43,1.88],
+        'Tmax':      [446, 440, 437, 460, 445, 452, 443, 454],
+        'HI':        [315, 484, 467, 404, 292, 93,  53,  128],
+        'OI':        [19,  26,  33,  24,  46,  13,  48,  22],
+    }
+    df = pd.DataFrame(data)
+    df['Ro_calc']    = ((0.018 * df['Tmax']) - 7.16).round(2)
+    df['PI']         = (df['S2'] / (df['S2'] + df['TOC'] + 0.001)).round(3)
+    df['HC_Potential'] = pd.cut(df['TOC'], bins=[0,0.5,1,2,4,100],
+                                labels=['Poor','Fair','Good','Very Good','Excellent'])
+    df['Maturity']   = pd.cut(df['Ro_calc'], bins=[0,0.6,0.9,1.35,2.0,100],
+                               labels=['Immature','Early Oil','Peak Oil','Wet Gas','Dry Gas'])
+    return df
+
+df = load_data()
+
+# colour maps per classification
+HC_COLORS = {
+    'Poor':'#ff4444','Fair':'#ff8c00','Good':'#f0c040',
+    'Very Good':'#00d4aa','Excellent':'#4499ff'
+}
+MAT_COLORS = {
+    'Immature':'#3d4f6a','Early Oil':'#f0c040','Peak Oil':'#00d4aa',
+    'Wet Gas':'#ff8c00','Dry Gas':'#ff4444'
+}
+
+
+# ═══════════════════════════════════════════════════════════════
+#  PDF REPORT GENERATOR
+# ═══════════════════════════════════════════════════════════════
+def generate_csv_report(dataframe):
+    """Fallback: export as styled CSV since fpdf may not be installed."""
+    return dataframe.to_csv(index=False).encode('utf-8')
+
+
+# ═══════════════════════════════════════════════════════════════
+#  SIDEBAR
+# ═══════════════════════════════════════════════════════════════
+st.sidebar.markdown("""
+<div class="sidebar-logo">
+    <div class="logo-title">⛽ PetroStream</div>
+    <div class="logo-version">ULTRA 2.0 · SBAA BASIN</div>
+    <div class="logo-author">Serhoudji Souhil · MSc Petroleum Geology</div>
+</div>
+""", unsafe_allow_html=True)
+
+st.sidebar.markdown('<div class="sidebar-section">Navigation</div>', unsafe_allow_html=True)
+
+NAV_ICONS = {
+    "🏠  Overview":          "Overview",
+    "📊  Basin Registry":    "Basin Registry",
+    "🧪  Geochemical Lab":   "Geochemical Lab",
+    "🗺️  3D Mapping":        "3D Mapping",
+    "📈  Cross-Plots":       "Cross-Plots",
+    "🔩  Log Viewer":        "Log Viewer",
+}
+menu_label = st.sidebar.radio("", list(NAV_ICONS.keys()), label_visibility="collapsed")
+menu = NAV_ICONS[menu_label]
+
+# ── Sidebar stats ──
+st.sidebar.markdown('<div class="sidebar-section">Live Basin Stats</div>', unsafe_allow_html=True)
+st.sidebar.markdown(f"""
+<div style="padding:8px 16px;font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#8a9ab5;line-height:2;">
+  <span style="color:#3d4f6a;">WELLS LOGGED</span><br>
+  <span style="color:#f0c040;font-size:1.1rem;">{len(df)}</span><br>
+  <span style="color:#3d4f6a;">AVG TOC</span><br>
+  <span style="color:#00d4aa;font-size:1.1rem;">{df['TOC'].mean():.2f}%</span><br>
+  <span style="color:#3d4f6a;">AVG Ro</span><br>
+  <span style="color:#4499ff;font-size:1.1rem;">{df['Ro_calc'].mean():.2f}%</span><br>
+  <span style="color:#3d4f6a;">MAX THICKNESS</span><br>
+  <span style="color:#ff8c00;font-size:1.1rem;">{df['Thickness'].max()}m</span>
+</div>
+""", unsafe_allow_html=True)
+
+st.sidebar.markdown('<div class="sidebar-section">Export</div>', unsafe_allow_html=True)
+csv_data = generate_csv_report(df)
+st.sidebar.download_button(
+    label="⬇  Export Basin Data (CSV)",
+    data=csv_data,
+    file_name="SBAA_Basin_Data.csv",
+    mime="text/csv",
+)
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("""
+<div style="font-size:0.65rem;color:#3d4f6a;text-align:center;padding:8px;font-family:'Share Tech Mono',monospace;">
+PETROSTREAM ULTRA 2.0<br>© 2024 SERHOUDJI SOUHIL<br>ALL RIGHTS RESERVED
+</div>
+""", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  PAGE 1 — OVERVIEW
+# ═══════════════════════════════════════════════════════════════
+if menu == "Overview":
+    st.markdown("""
+    <div class="page-header">
+        <div>
+            <div class="page-subtitle">SBAA Basin · Upper Devonian</div>
+            <div class="page-title">Project Overview</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_info, col_map = st.columns([1, 1.4])
+
+    with col_info:
+        st.markdown("""
+        <div class="section-header">Executive Summary</div>
+        <p>
+        Integrated characterization of the <strong style="color:#f0c040;">Upper Devonian source rock</strong>
+        within the <strong style="color:#00d4aa;">SBAA Basin</strong> using Rock-Eval pyrolysis data,
+        stratigraphic analysis, and advanced geochemical cross-plot techniques.
+        </p>
+        <p>
+        Maturity assessment follows the <em>Jarvie (2007)</em> vitrinite reflectance proxy model:
+        <code style="background:#101828;color:#00d4aa;padding:2px 6px;border-radius:3px;">Ro = 0.018 × Tmax − 7.16</code>
+        </p>
+        """, unsafe_allow_html=True)
+
+        st.markdown('<div class="section-header">Data Inventory</div>', unsafe_allow_html=True)
+
+        inv_data = {
+            "Parameter":   ["Wells Analysed","Stratigraphic Interval","Main Method","Interpolation","Coordinate System"],
+            "Value":       ["8 exploration wells","Upper Devonian (Frasnian)","Rock-Eval Pyrolysis","Cubic Spline / RBF","UTM Zone 31N"],
+        }
+        st.dataframe(pd.DataFrame(inv_data), use_container_width=True, hide_index=True)
+
+        st.markdown('<div class="section-header">Maturity Window</div>', unsafe_allow_html=True)
+        for _, row in df.iterrows():
+            pct = min(row['Ro_calc'] / 3.0 * 100, 100)
+            col = MAT_COLORS.get(str(row['Maturity']), '#3d4f6a')
+            st.markdown(f"""
+            <div class="maturity-bar-wrap">
+                <div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:3px;">
+                    <span style="font-family:'Rajdhani',sans-serif;color:#e8eaf0;font-weight:600;">{row['Well']}</span>
+                    <span style="font-family:'Share Tech Mono',monospace;color:{col};">Ro {row['Ro_calc']:.2f}% · {row['Maturity']}</span>
+                </div>
+                <div class="maturity-bar">
+                    <div class="maturity-bar-fill" style="width:{pct}%;background:linear-gradient(90deg,{col}88,{col});"></div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    with col_map:
+        st.markdown('<div class="section-header">Well Location Map</div>', unsafe_allow_html=True)
+        fig_map = go.Figure()
+        for _, row in df.iterrows():
+            hc = str(row['HC_Potential'])
+            fig_map.add_trace(go.Scatter(
+                x=[row['X']], y=[row['Y']],
+                mode='markers+text',
+                marker=dict(size=14, color=HC_COLORS.get(hc,'#f0c040'),
+                            line=dict(color='#e8eaf0', width=1),
+                            symbol='diamond'),
+                text=[row['Well']],
+                textposition='top center',
+                textfont=dict(family='Rajdhani', size=11, color='#e8eaf0'),
+                name=hc,
+                hovertemplate=(
+                    f"<b>{row['Well']}</b><br>"
+                    f"TOC: {row['TOC']:.2f}%<br>"
+                    f"Tmax: {row['Tmax']}°C<br>"
+                    f"Ro: {row['Ro_calc']:.2f}%<br>"
+                    f"HC Potential: {hc}<extra></extra>"
+                ),
+                showlegend=False,
+            ))
+        fig_map.update_layout(
+            **PLOTLY_TEMPLATE['layout'],
+            title="Well Locations — HC Potential",
+            xaxis_title="Easting (km)", yaxis_title="Northing (km)",
+            height=480,
+        )
+        st.plotly_chart(fig_map, use_container_width=True)
+
+        # Legend
+        st.markdown("""
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:-8px;">
+        """ + "".join([
+            f'<span class="status-badge badge-active" style="background:rgba(0,0,0,0);border-color:{HC_COLORS[k]}20;color:{HC_COLORS[k]};">◆ {k}</span>'
+            for k in HC_COLORS
+        ]) + "</div>", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  PAGE 2 — BASIN REGISTRY
+# ═══════════════════════════════════════════════════════════════
 elif menu == "Basin Registry":
-    st.title("Integrated Reservoir Registry")
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Avg TOC", f"{df['COT'].mean():.2f}%")
-    c2.metric("Max Thickness", f"{df['Thickness'].max()}m")
-    c3.metric("Avg Ro", f"{df['Ro_calc'].mean():.2f}%")
-    c4.metric("Wells", len(df))
-    st.dataframe(df.round(2).style.background_gradient(cmap='YlGnBu'), use_container_width=True)
+    st.markdown("""
+    <div class="page-header">
+        <div>
+            <div class="page-subtitle">Integrated Data · 8 Wells</div>
+            <div class="page-title">Basin Registry</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# ... [Geochemical, 3D Mapping, and Log Viewer code remains identical to previous version] ...
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Avg TOC",        f"{df['TOC'].mean():.2f} %")
+    c2.metric("Max Thickness",  f"{df['Thickness'].max()} m")
+    c3.metric("Avg Ro",         f"{df['Ro_calc'].mean():.2f} %")
+    c4.metric("Avg HI",         f"{df['HI'].mean():.0f}")
+    c5.metric("Wells",          f"{len(df)}")
+
+    st.markdown('<div class="section-header">Well Cards</div>', unsafe_allow_html=True)
+    cols = st.columns(4)
+    for i, (_, row) in enumerate(df.iterrows()):
+        hc   = str(row['HC_Potential'])
+        mat  = str(row['Maturity'])
+        col  = HC_COLORS.get(hc,'#f0c040')
+        mcol = MAT_COLORS.get(mat,'#3d4f6a')
+        with cols[i % 4]:
+            st.markdown(f"""
+            <div class="well-card">
+                <div style="position:absolute;top:0;right:0;width:4px;height:100%;background:{col};border-radius:0 6px 6px 0;"></div>
+                <div class="well-name">{row['Well']}</div>
+                <div class="well-highlight">{row['Thickness']} m</div>
+                <div class="well-stat">THICKNESS</div>
+                <hr style="margin:8px 0;border-color:#1a2540;">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+                    <div>
+                        <div style="font-family:'Share Tech Mono',monospace;font-size:0.85rem;color:#f0c040;">{row['TOC']:.2f}%</div>
+                        <div class="well-stat">TOC</div>
+                    </div>
+                    <div>
+                        <div style="font-family:'Share Tech Mono',monospace;font-size:0.85rem;color:#4499ff;">{row['Ro_calc']:.2f}%</div>
+                        <div class="well-stat">Ro</div>
+                    </div>
+                    <div>
+                        <div style="font-family:'Share Tech Mono',monospace;font-size:0.85rem;color:#ff8c00;">{row['Tmax']}°C</div>
+                        <div class="well-stat">Tmax</div>
+                    </div>
+                    <div>
+                        <div style="font-family:'Share Tech Mono',monospace;font-size:0.85rem;color:#00d4aa;">{row['HI']}</div>
+                        <div class="well-stat">HI</div>
+                    </div>
+                </div>
+                <hr style="margin:8px 0;border-color:#1a2540;">
+                <span class="status-badge" style="background:rgba(0,0,0,0);border-color:{col}33;color:{col};font-size:0.62rem;">{hc}</span>
+                <span class="status-badge" style="background:rgba(0,0,0,0);border-color:{mcol}33;color:{mcol};font-size:0.62rem;margin-left:4px;">{mat}</span>
+            </div>
+            <br>
+            """, unsafe_allow_html=True)
+
+    st.markdown('<div class="section-header">Complete Dataset</div>', unsafe_allow_html=True)
+    display_df = df[['Well','Thickness','TOC','S2','Tmax','HI','OI','Ro_calc','HC_Potential','Maturity']].copy()
+    st.dataframe(
+        display_df.style
+            .format({'TOC':'{:.2f}','S2':'{:.2f}','Ro_calc':'{:.2f}'})
+            .background_gradient(subset=['TOC','S2','Thickness'], cmap='YlOrBr')
+            .background_gradient(subset=['Ro_calc','Tmax'], cmap='Blues'),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
+#  PAGE 3 — GEOCHEMICAL LAB
+# ═══════════════════════════════════════════════════════════════
+elif menu == "Geochemical Lab":
+    st.markdown("""
+    <div class="page-header">
+        <div>
+            <div class="page-subtitle">Rock-Eval Pyrolysis · Source Rock Evaluation</div>
+            <div class="page-title">Geochemical Lab</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["📊  Distribution Analysis", "🔥  Thermal Maturity", "📉  Ranking"])
+
+    with tab1:
+        cols_params = st.columns([1,2])
+        with cols_params[0]:
+            param = st.selectbox("Parameter", ['TOC','S2','HI','OI','Tmax','Ro_calc','Thickness'], index=0)
+        with cols_params[1]:
+            chart_type = st.radio("Chart type", ["Bar","Violin","Box"], horizontal=True)
+
+        param_colors = {
+            'TOC':'#f0c040','S2':'#00d4aa','HI':'#4499ff',
+            'OI':'#ff8c00','Tmax':'#ff4444','Ro_calc':'#aa66ff','Thickness':'#44ccff'
+        }
+        pc = param_colors.get(param, '#f0c040')
+
+        if chart_type == "Bar":
+            fig = go.Figure(go.Bar(
+                x=df['Well'], y=df[param],
+                marker=dict(
+                    color=df[param],
+                    colorscale=[[0,'#101828'],[0.5,pc+'88'],[1,pc]],
+                    line=dict(color=pc, width=0.5),
+                ),
+                text=df[param].round(2),
+                textposition='outside',
+                textfont=dict(family='Share Tech Mono', size=9, color='#8a9ab5'),
+                hovertemplate='<b>%{x}</b><br>' + param + ': %{y:.2f}<extra></extra>',
+            ))
+        elif chart_type == "Violin":
+            fig = go.Figure(go.Violin(
+                y=df[param], points='all',
+                pointpos=0, jitter=0.3,
+                line_color=pc, fillcolor=pc+'22',
+                marker=dict(color=pc, size=8),
+                hovertemplate=param + ': %{y:.2f}<extra></extra>',
+            ))
+        else:
+            fig = go.Figure(go.Box(
+                y=df[param], points='all',
+                marker=dict(color=pc, size=8),
+                line=dict(color=pc),
+                fillcolor=pc+'22',
+                hovertemplate=param + ': %{y:.2f}<extra></extra>',
+            ))
+
+        fig.update_layout(
+            **PLOTLY_TEMPLATE['layout'],
+            title=f"{param} — All Wells",
+            yaxis_title=param,
+            height=420,
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Quick stats
+        s = df[param]
+        sc1,sc2,sc3,sc4 = st.columns(4)
+        sc1.metric("Mean",  f"{s.mean():.2f}")
+        sc2.metric("Std",   f"{s.std():.2f}")
+        sc3.metric("Min",   f"{s.min():.2f}")
+        sc4.metric("Max",   f"{s.max():.2f}")
+
+    with tab2:
+        fig_mat = go.Figure()
+        # Pseudo-Tmax profile
+        tmax_sorted = df.sort_values('Tmax')
+        fig_mat.add_trace(go.Scatter(
+            x=tmax_sorted['Well'], y=tmax_sorted['Tmax'],
+            mode='lines+markers',
+            line=dict(color='#ff4444', width=2),
+            marker=dict(color=tmax_sorted['Ro_calc'], colorscale='YlOrRd', size=12,
+                        line=dict(color='#e8eaf0',width=1),
+                        colorbar=dict(title='Ro%', x=1.02)),
+            name='Tmax (°C)',
+            hovertemplate='<b>%{x}</b><br>Tmax: %{y}°C<extra></extra>',
+        ))
+        # Reference lines
+        for level, label, color in [(435,'Early Oil','#f0c040'),(455,'Wet Gas','#ff8c00'),(470,'Dry Gas','#ff4444')]:
+            fig_mat.add_hline(y=level, line_dash='dash', line_color=color, opacity=0.5,
+                              annotation_text=label, annotation_position='right',
+                              annotation_font=dict(color=color, size=10))
+        fig_mat.update_layout(
+            **PLOTLY_TEMPLATE['layout'],
+            title="Thermal Maturity Profile (Tmax / Ro)",
+            yaxis_title="Tmax (°C)", height=380,
+        )
+        st.plotly_chart(fig_mat, use_container_width=True)
+
+        # Ro vs Depth proxy
+        fig_ro = make_subplots(rows=1, cols=2,
+                               subplot_titles=['Ro Calculated', 'HI vs OI (Kerogen Type)'],
+                               specs=[[{"type":"scatter"},{"type":"scatter"}]])
+        for _, row in df.iterrows():
+            col = MAT_COLORS.get(str(row['Maturity']),'#3d4f6a')
+            fig_ro.add_trace(go.Bar(
+                x=[row['Well']], y=[row['Ro_calc']],
+                marker_color=col, name=row['Well'], showlegend=False,
+            ), row=1, col=1)
+            fig_ro.add_trace(go.Scatter(
+                x=[row['OI']], y=[row['HI']],
+                mode='markers+text', text=[row['Well']],
+                textposition='top center',
+                textfont=dict(size=9, color='#8a9ab5'),
+                marker=dict(size=10, color=col, line=dict(color='#e8eaf0',width=0.5)),
+                showlegend=False,
+                hovertemplate=f"<b>{row['Well']}</b><br>OI: {row['OI']}<br>HI: {row['HI']}<extra></extra>",
+            ), row=1, col=2)
+        fig_ro.update_layout(**PLOTLY_TEMPLATE['layout'], height=380, title="")
+        fig_ro.update_yaxes(title_text="Ro (%)",  row=1, col=1)
+        fig_ro.update_yaxes(title_text="HI (mg HC/g TOC)", row=1, col=2)
+        fig_ro.update_xaxes(title_text="OI (mg CO₂/g TOC)", row=1, col=2)
+        st.plotly_chart(fig_ro, use_container_width=True)
+
+    with tab3:
+        rank_by = st.selectbox("Rank wells by", ['TOC','S2','Thickness','HI','Ro_calc'])
+        df_ranked = df[['Well',rank_by,'HC_Potential','Maturity']].sort_values(rank_by, ascending=False).reset_index(drop=True)
+        df_ranked.index += 1
+        df_ranked.insert(0,'Rank',df_ranked.index)
+
+        fig_rank = go.Figure(go.Bar(
+            x=df_ranked[rank_by], y=df_ranked['Well'],
+            orientation='h',
+            marker=dict(
+                color=df_ranked[rank_by],
+                colorscale=[[0,'#1a2540'],[0.5,'#c8982a'],[1,'#f0c040']],
+                line=dict(color='#f0c040', width=0.3),
+            ),
+            text=df_ranked[rank_by].round(2),
+            textposition='outside',
+            textfont=dict(family='Share Tech Mono', size=10),
+            hovertemplate='<b>%{y}</b><br>' + rank_by + ': %{x:.2f}<extra></extra>',
+        ))
+        fig_rank.update_layout(
+            **PLOTLY_TEMPLATE['layout'],
+            title=f"Well Ranking by {rank_by}",
+            xaxis_title=rank_by, yaxis_autorange='reversed',
+            height=380,
+        )
+        st.plotly_chart(fig_rank, use_container_width=True)
+        st.dataframe(df_ranked, use_container_width=True, hide_index=True)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  PAGE 4 — 3D MAPPING
+# ═══════════════════════════════════════════════════════════════
+elif menu == "3D Mapping":
+    st.markdown("""
+    <div class="page-header">
+        <div>
+            <div class="page-subtitle">Spatial Interpolation · Basin Maps</div>
+            <div class="page-title">3D Mapping Suite</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_ctrl, col_map = st.columns([1, 3])
+    with col_ctrl:
+        param_3d = st.selectbox("Map Parameter", ['Thickness','TOC','S2','Ro_calc','HI'])
+        interp   = st.selectbox("Interpolation", ['Cubic','Linear','Nearest'])
+        view_3d  = st.radio("View Mode", ["Surface 3D","Contour 2D","Both"])
+        resolution = st.slider("Grid Resolution", 30, 120, 60)
+        colormap = st.selectbox("Color Scale", ['YlOrBr','Plasma','Viridis','Hot','Cividis'])
+
+    with col_map:
+        xi = np.linspace(df['X'].min()-0.5, df['X'].max()+0.5, resolution)
+        yi = np.linspace(df['Y'].min()-0.5, df['Y'].max()+0.5, resolution)
+        XI, YI = np.meshgrid(xi, yi)
+        method_map = {'Cubic':'cubic','Linear':'linear','Nearest':'nearest'}
+        ZI = griddata((df['X'], df['Y']), df[param_3d],
+                      (XI, YI), method=method_map[interp])
+
+        if view_3d in ["Surface 3D","Both"]:
+            fig_surf = go.Figure(go.Surface(
+                x=xi, y=yi, z=ZI,
+                colorscale=colormap,
+                contours=dict(
+                    z=dict(show=True, usecolormap=True, highlightcolor='#f0c040', project_z=True)
+                ),
+                lighting=dict(ambient=0.6, diffuse=0.8, specular=0.3),
+                colorbar=dict(title=param_3d, tickfont=dict(color='#8a9ab5', size=10),
+                              bgcolor='rgba(8,14,26,0.8)', bordercolor='#1a2540'),
+                hovertemplate='E: %{x:.1f}<br>N: %{y:.1f}<br>' + param_3d + ': %{z:.2f}<extra></extra>',
+            ))
+            # Add well scatter
+            fig_surf.add_trace(go.Scatter3d(
+                x=df['X'], y=df['Y'], z=df[param_3d]+df[param_3d].max()*0.05,
+                mode='markers+text',
+                marker=dict(size=5, color='#f0c040', symbol='diamond',
+                            line=dict(color='white', width=1)),
+                text=df['Well'],
+                textfont=dict(size=9, color='#f0c040'),
+                name='Wells',
+                hovertemplate='<b>%{text}</b><br>' + param_3d + ': %{z:.2f}<extra></extra>',
+            ))
+            fig_surf.update_layout(
+                **PLOTLY_TEMPLATE['layout'],
+                title=f"{param_3d} — 3D Surface Map",
+                scene=dict(
+                    bgcolor='#080e1a',
+                    xaxis=dict(backgroundcolor='#0c1424', gridcolor='#1a2540',
+                               title='Easting (km)', tickfont=dict(size=9,color='#8a9ab5')),
+                    yaxis=dict(backgroundcolor='#0c1424', gridcolor='#1a2540',
+                               title='Northing (km)', tickfont=dict(size=9,color='#8a9ab5')),
+                    zaxis=dict(backgroundcolor='#0c1424', gridcolor='#1a2540',
+                               title=param_3d, tickfont=dict(size=9,color='#8a9ab5')),
+                    camera=dict(eye=dict(x=1.6, y=-1.6, z=1.2)),
+                ),
+                height=520,
+                margin=dict(l=0,r=0,t=50,b=0),
+            )
+            st.plotly_chart(fig_surf, use_container_width=True)
+
+        if view_3d in ["Contour 2D","Both"]:
+            fig_cont = go.Figure()
+            fig_cont.add_trace(go.Contour(
+                x=xi, y=yi, z=ZI,
+                colorscale=colormap,
+                ncontours=20,
+                contours_coloring='heatmap',
+                line_smoothing=0.85,
+                colorbar=dict(title=param_3d, tickfont=dict(color='#8a9ab5',size=10),
+                              bgcolor='rgba(8,14,26,0.8)', bordercolor='#1a2540'),
+                hovertemplate='E: %{x:.1f}<br>N: %{y:.1f}<br>' + param_3d + ': %{z:.2f}<extra></extra>',
+            ))
+            fig_cont.add_trace(go.Scatter(
+                x=df['X'], y=df['Y'],
+                mode='markers+text',
+                marker=dict(size=10, color='#f0c040', symbol='diamond',
+                            line=dict(color='white',width=1)),
+                text=df['Well'],
+                textposition='top center',
+                textfont=dict(family='Rajdhani', size=11, color='#f0c040'),
+                name='Wells',
+                hovertemplate='<b>%{text}</b><extra></extra>',
+            ))
+            fig_cont.update_layout(
+                **PLOTLY_TEMPLATE['layout'],
+                title=f"{param_3d} — Contour Map",
+                xaxis_title='Easting (km)', yaxis_title='Northing (km)',
+                height=480,
+            )
+            st.plotly_chart(fig_cont, use_container_width=True)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  PAGE 5 — CROSS-PLOTS
+# ═══════════════════════════════════════════════════════════════
+elif menu == "Cross-Plots":
+    st.markdown("""
+    <div class="page-header">
+        <div>
+            <div class="page-subtitle">Geochemical Diagnostics · Kerogen Typing</div>
+            <div class="page-title">Cross-Plot Diagnostics</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    params = ['TOC','S2','HI','OI','Tmax','Ro_calc','Thickness','PI']
+    cp1, cp2, cp3 = st.columns([1,1,1])
+    with cp1: x_param = st.selectbox("X Axis", params, index=0)
+    with cp2: y_param = st.selectbox("Y Axis", params, index=1)
+    with cp3: size_p  = st.selectbox("Bubble Size", params, index=2)
+
+    tab_a, tab_b, tab_c = st.tabs(["🔵  Bubble Cross-Plot", "🔺  Van Krevelen Diagram", "🌈  Correlation Matrix"])
+
+    with tab_a:
+        fig_cp = go.Figure()
+        for _, row in df.iterrows():
+            hc  = str(row['HC_Potential'])
+            col = HC_COLORS.get(hc,'#f0c040')
+            sz  = max(10, min(40, row[size_p] / df[size_p].max() * 40))
+            fig_cp.add_trace(go.Scatter(
+                x=[row[x_param]], y=[row[y_param]],
+                mode='markers+text',
+                marker=dict(size=sz, color=col, opacity=0.85,
+                            line=dict(color='white',width=1.2),
+                            symbol='circle'),
+                text=[row['Well']],
+                textposition='top center',
+                textfont=dict(family='Rajdhani', size=10, color='#e8eaf0'),
+                name=hc,
+                showlegend=False,
+                hovertemplate=(
+                    f"<b>{row['Well']}</b><br>"
+                    f"{x_param}: {row[x_param]:.2f}<br>"
+                    f"{y_param}: {row[y_param]:.2f}<br>"
+                    f"{size_p}: {row[size_p]:.2f}<br>"
+                    f"HC Potential: {hc}<extra></extra>"
+                ),
+            ))
+        # Trendline
+        z = np.polyfit(df[x_param], df[y_param], 1)
+        xfit = np.linspace(df[x_param].min(), df[x_param].max(), 100)
+        fig_cp.add_trace(go.Scatter(
+            x=xfit, y=np.polyval(z, xfit),
+            mode='lines', line=dict(color='#f0c040', dash='dot', width=1.5),
+            name='Trend', showlegend=False,
+        ))
+        r = np.corrcoef(df[x_param], df[y_param])[0,1]
+        fig_cp.update_layout(
+            **PLOTLY_TEMPLATE['layout'],
+            title=f"{y_param} vs {x_param}  |  r = {r:.3f}",
+            xaxis_title=x_param, yaxis_title=y_param, height=480,
+        )
+        st.plotly_chart(fig_cp, use_container_width=True)
+
+    with tab_b:
+        fig_vk = go.Figure()
+        # Type regions (background)
+        regions = [
+            dict(x=[0,50,50,0], y=[600,600,150,150],  name='Type II', fillcolor='rgba(68,153,255,0.06)'),
+            dict(x=[0,150,150,0], y=[700,700,400,400], name='Type I',  fillcolor='rgba(0,212,170,0.06)'),
+            dict(x=[50,150,150,50], y=[200,200,100,100], name='Type III', fillcolor='rgba(255,140,0,0.06)'),
+        ]
+        for r in regions:
+            fig_vk.add_trace(go.Scatter(
+                x=r['x'], y=r['y'], fill='toself',
+                fillcolor=r['fillcolor'], line=dict(color='rgba(255,255,255,0.05)'),
+                name=r['name'], mode='lines', hoverinfo='skip',
+            ))
+        for _, row in df.iterrows():
+            col = MAT_COLORS.get(str(row['Maturity']),'#3d4f6a')
+            fig_vk.add_trace(go.Scatter(
+                x=[row['OI']], y=[row['HI']],
+                mode='markers+text',
+                marker=dict(size=14, color=col, symbol='diamond',
+                            line=dict(color='white',width=1)),
+                text=[row['Well']],
+                textposition='top center',
+                textfont=dict(family='Rajdhani', size=10, color='#e8eaf0'),
+                name=row['Well'], showlegend=False,
+                hovertemplate=(
+                    f"<b>{row['Well']}</b><br>"
+                    f"OI: {row['OI']}<br>HI: {row['HI']}<br>"
+                    f"Maturity: {row['Maturity']}<extra></extra>"
+                ),
+            ))
+        for label, ox, hy in [('TYPE I', 25, 660), ('TYPE II', 100, 580), ('TYPE III', 100, 180)]:
+            fig_vk.add_annotation(x=ox, y=hy, text=label, showarrow=False,
+                                  font=dict(size=10, color='#3d4f6a',
+                                            family='Share Tech Mono'), opacity=0.7)
+        fig_vk.update_layout(
+            **PLOTLY_TEMPLATE['layout'],
+            title="Van Krevelen Diagram — Kerogen Typing",
+            xaxis_title="OI (mg CO₂/g TOC)", yaxis_title="HI (mg HC/g TOC)",
+            xaxis=dict(**PLOTLY_TEMPLATE['layout']['xaxis'], range=[0, 60]),
+            yaxis=dict(**PLOTLY_TEMPLATE['layout']['yaxis'], range=[0, 700]),
+            height=480,
+        )
+        st.plotly_chart(fig_vk, use_container_width=True)
+
+    with tab_c:
+        numeric_cols = ['Thickness','TOC','S2','Tmax','HI','OI','Ro_calc','PI']
+        corr = df[numeric_cols].corr()
+        fig_hm = go.Figure(go.Heatmap(
+            z=corr.values, x=corr.columns, y=corr.index,
+            colorscale=[
+                [0.0,'#ff4444'],[0.2,'#8a1a1a'],[0.4,'#1a2540'],
+                [0.6,'#0d5a3a'],[0.8,'#00a07a'],[1.0,'#00d4aa']
+            ],
+            zmid=0, text=corr.round(2).values.astype(str),
+            texttemplate="%{text}", textfont=dict(size=10, family='Share Tech Mono'),
+            hoverongaps=False, showscale=True,
+            colorbar=dict(tickfont=dict(color='#8a9ab5',size=9),
+                          bgcolor='rgba(8,14,26,0.8)', bordercolor='#1a2540'),
+        ))
+        fig_hm.update_layout(
+            **PLOTLY_TEMPLATE['layout'],
+            title="Parameter Correlation Matrix",
+            xaxis=dict(tickfont=dict(family='Share Tech Mono',size=10,color='#8a9ab5')),
+            yaxis=dict(tickfont=dict(family='Share Tech Mono',size=10,color='#8a9ab5')),
+            height=480,
+        )
+        st.plotly_chart(fig_hm, use_container_width=True)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  PAGE 6 — LOG VIEWER
+# ═══════════════════════════════════════════════════════════════
+elif menu == "Log Viewer":
+    st.markdown("""
+    <div class="page-header">
+        <div>
+            <div class="page-subtitle">Synthetic Petrophysical Logs</div>
+            <div class="page-title">Log Viewer</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    lv1, lv2 = st.columns([1, 3])
+    with lv1:
+        well_sel = st.selectbox("Select Well", df['Well'].tolist())
+        log_set  = st.multiselect("Log Tracks", ['GR','RHOB','NPHI','RT','DT','PE'], default=['GR','RHOB','NPHI','RT'])
+        depth_rng = st.slider("Depth Range (m)", 2000, 4500, (2800, 3800), step=50)
+        seed = df[df['Well']==well_sel].index[0]
+
+    well_row = df[df['Well']==well_sel].iloc[0]
+
+    depth = np.arange(depth_rng[0], depth_rng[1], 0.5)
+    np.random.seed(seed * 7 + 42)
+    logs = {
+        'GR':   np.clip(np.cumsum(np.random.randn(len(depth))*0.5)+70, 10, 150),
+        'RHOB': np.clip(np.cumsum(np.random.randn(len(depth))*0.001)+2.5, 2.0, 2.9),
+        'NPHI': np.clip(np.cumsum(np.random.randn(len(depth))*0.001)+0.22, 0.05, 0.45),
+        'RT':   np.abs(np.cumsum(np.random.randn(len(depth))*0.2)+10),
+        'DT':   np.clip(np.cumsum(np.random.randn(len(depth))*0.3)+80, 50, 140),
+        'PE':   np.clip(np.cumsum(np.random.randn(len(depth))*0.05)+2.8, 1.5, 6.0),
+    }
+    log_meta = {
+        'GR':   dict(color='#00d4aa', unit='API',       xmin=0,    xmax=150,  fill=True),
+        'RHOB': dict(color='#ff4444', unit='g/cc',      xmin=1.8,  xmax=3.0,  fill=False),
+        'NPHI': dict(color='#4499ff', unit='v/v',       xmin=0.0,  xmax=0.5,  fill=True),
+        'RT':   dict(color='#f0c040', unit='ohm·m',     xmin=0.1,  xmax=1000, fill=False),
+        'DT':   dict(color='#aa66ff', unit='µs/ft',     xmin=40,   xmax=160,  fill=False),
+        'PE':   dict(color='#ff8c00', unit='b/e',       xmin=0,    xmax=8,    fill=False),
+    }
+
+    visible_logs = [l for l in log_set if l in logs]
+    if not visible_logs:
+        st.info("Select at least one log track.")
+    else:
+        n_tracks = len(visible_logs)
+        fig_log = make_subplots(
+            rows=1, cols=n_tracks,
+            shared_yaxes=True,
+            subplot_titles=visible_logs,
+            horizontal_spacing=0.02,
+        )
+        for i, log_name in enumerate(visible_logs):
+            meta = log_meta[log_name]
+            vals = logs[log_name]
+            col_num = i + 1
+
+            if meta['fill']:
+                fig_log.add_trace(go.Scatter(
+                    x=vals, y=depth, mode='lines',
+                    line=dict(color=meta['color'], width=1),
+                    fill='tozerox', fillcolor=meta['color']+'22',
+                    name=log_name,
+                    hovertemplate=f"{log_name}: %{{x:.2f}} {meta['unit']}<br>Depth: %{{y:.0f}}m<extra></extra>",
+                ), row=1, col=col_num)
+            else:
+                fig_log.add_trace(go.Scatter(
+                    x=vals, y=depth, mode='lines',
+                    line=dict(color=meta['color'], width=1.2),
+                    name=log_name,
+                    hovertemplate=f"{log_name}: %{{x:.2f}} {meta['unit']}<br>Depth: %{{y:.0f}}m<extra></extra>",
+                ), row=1, col=col_num)
+
+            axis_key = 'xaxis' if col_num == 1 else f'xaxis{col_num}'
+            fig_log.update_layout(**{axis_key: dict(
+                range=[meta['xmin'], meta['xmax']],
+                gridcolor='#1a2540', gridwidth=0.5,
+                tickfont=dict(family='Share Tech Mono', size=8, color='#8a9ab5'),
+                title_text=f"{log_name} ({meta['unit']})",
+                title_font=dict(family='Barlow Condensed', size=10, color=meta['color']),
+                side='top',
+            )})
+
+        fig_log.update_yaxes(
+            autorange='reversed',
+            title_text="MD (m)", title_font=dict(family='Barlow Condensed', size=11, color='#8a9ab5'),
+            gridcolor='#1a2540', gridwidth=0.5,
+            tickfont=dict(family='Share Tech Mono', size=9, color='#8a9ab5'),
+        )
+        fig_log.update_layout(
+            **PLOTLY_TEMPLATE['layout'],
+            title=f"Well Log — {well_sel}",
+            height=650, showlegend=False,
+        )
+        st.plotly_chart(fig_log, use_container_width=True)
+
+    with lv2:
+        st.markdown(f"""
+        <div class="section-header">Well Header — {well_sel}</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px;">
+            <div class="well-card">
+                <div class="well-stat">TOC</div>
+                <div class="well-highlight">{well_row['TOC']:.2f}%</div>
+            </div>
+            <div class="well-card">
+                <div class="well-stat">Tmax</div>
+                <div class="well-highlight">{well_row['Tmax']}°C</div>
+            </div>
+            <div class="well-card">
+                <div class="well-stat">Ro calc</div>
+                <div class="well-highlight">{well_row['Ro_calc']:.2f}%</div>
+            </div>
+            <div class="well-card">
+                <div class="well-stat">HI</div>
+                <div class="well-highlight">{well_row['HI']}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
