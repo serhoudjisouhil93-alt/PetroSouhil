@@ -4,11 +4,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
 import plotly.graph_objects as go
+import io
 
 # --- 1. App Configuration ---
 st.set_page_config(page_title="PetroStream Ultra 2.0 Premium", layout="wide")
 
-# --- 2. Data Loading (V.14 SBAA Dataset) ---
+# --- 2. Data Loading (V.14 SBAA Integrated Dataset) ---
 @st.cache_data
 def load_data():
     data = {
@@ -23,67 +24,71 @@ def load_data():
         'IO': [19, 26, 33, 24, 46, 13, 48, 22]
     }
     df = pd.DataFrame(data)
-    
-    # --- NEW: Phase 1 Physics Calculations ---
-    # 1. Calculated Vitrinite Reflectance (Ro %) - Jarvie et al. (2007)
+    # Physics Calculations from Phase 1
     df['Ro_calc'] = (0.018 * df['Tmax']) - 7.16
-    
-    # 2. Potential Yield (PY) in mg HC/g rock
-    df['PY'] = df['COT'] * 0.1 + df['S2']
-    
-    # 3. Transformation Ratio (TR) - Simple estimate based on Tmax
-    df['TR'] = np.clip((df['Tmax'] - 435) / (470 - 435), 0, 1)
-    
     return df
 
 df = load_data()
 
-# --- 3. Sidebar & Navigation ---
+# --- 3. Sidebar: Sweet Spot Controls ---
 st.sidebar.title("PetroStream Ultra 2.0")
-menu = st.sidebar.radio("Navigation", ["Basin Dashboard", "Advanced Analytics", "3D Isopach Mapping"])
-search_well = st.sidebar.selectbox("🔍 Search Well", ["All Wells"] + list(df['Well']))
+menu = st.sidebar.radio("Navigation", ["Basin Dashboard", "3D Sweet Spot Mapping"])
 
-# --- 4. Module: Advanced Analytics (Maturity & Yield) ---
-if menu == "Advanced Analytics":
-    st.header("Phase 1: Reservoir Maturity & Yield Modeling")
-    
-    # Display specialized metrics
-    col1, col2, col3 = st.columns(3)
-    target_df = df if search_well == "All Wells" else df[df['Well'] == search_well]
-    
-    col1.metric("Avg Ro Equivalent", f"{target_df['Ro_calc'].mean():.2f} %")
-    col2.metric("Avg Transformation Ratio", f"{target_df['TR'].mean()*100:.1f} %")
-    col3.metric("Avg Potential Yield", f"{target_df['PY'].mean():.2f} mg/g")
+st.sidebar.markdown("---")
+st.sidebar.subheader("🎯 Sweet Spot Criteria")
+min_toc = st.sidebar.slider("Min TOC (%)", 0.0, 10.0, 1.5)
+min_thick = st.sidebar.slider("Min Thickness (m)", 0, 300, 100)
+temp_range = st.sidebar.slider("Tmax Range (°C)", 400, 500, (435, 460))
 
-    st.markdown("---")
-    
-    # Ro vs Tmax Correlation Chart
-    fig, ax = plt.subplots(figsize=(8, 4))
-    ax.scatter(df['Tmax'], df['Ro_calc'], c=df['Ro_calc'], cmap='hot_r', edgecolors='black')
-    ax.set_xlabel("Tmax (°C)")
-    ax.set_ylabel("Calculated Ro (%)")
-    ax.set_title("Thermal Maturity Conversion (Jarvie Method)")
-    ax.grid(True, alpha=0.3)
-    st.pyplot(fig)
+# Apply Sweet Spot Logic
+df['is_sweet_spot'] = (
+    (df['COT'] >= min_toc) & 
+    (df['Thickness'] >= min_thick) & 
+    (df['Tmax'].between(temp_range[0], temp_range[1]))
+)
 
-# --- 5. Module: 3D Isopach Mapping (Phase 2 Preview) ---
-elif menu == "3D Isopach Mapping":
-    st.header("SBAA Basin: 3D Stratigraphic Surface")
+# --- 4. Module: 3D Sweet Spot Mapping ---
+if menu == "3D Sweet Spot Mapping":
+    st.header("SBAA Basin: 3D Surface & Sweet Spot Detection")
     
-    # Create grid for 3D
+    # Grid for smooth surface
     xi = np.linspace(df.X.min()-1, df.X.max()+1, 50)
     yi = np.linspace(df.Y.min()-1, df.Y.max()+1, 50)
     xi, yi = np.meshgrid(xi, yi)
     zi = griddata((df.X, df.Y), df.Thickness, (xi, yi), method='cubic')
 
-    # Plotly 3D Surface
-    fig = go.Figure(data=[go.Surface(z=zi, x=xi, y=yi, colorscale='Viridis')])
-    fig.update_layout(title='Upper Devonian Thickness Surface', autosize=False,
-                      width=800, height=800,
-                      margin=dict(l=65, r=50, b=65, t=90))
-    st.plotly_chart(fig, use_container_width=True)
+    # Create 3D Surface
+    fig = go.Figure(data=[go.Surface(z=zi, x=xi, y=yi, colorscale='Blues', opacity=0.8, name='Formation Top')])
+    
+    # Highlight Sweet Spots with Red Stars
+    sweet_spots = df[df['is_sweet_spot'] == True]
+    non_sweet = df[df['is_sweet_spot'] == False]
+    
+    fig.add_trace(go.Scatter3d(
+        x=sweet_spots['X'], y=sweet_spots['Y'], z=sweet_spots['Thickness'],
+        mode='markers+text',
+        marker=dict(size=10, color='red', symbol='star'),
+        text=sweet_spots['Well'],
+        name='Sweet Spot'
+    ))
+    
+    fig.add_trace(go.Scatter3d(
+        x=non_sweet['X'], y=non_sweet['Y'], z=non_sweet['Thickness'],
+        mode='markers',
+        marker=dict(size=5, color='black', symbol='circle'),
+        name='Standard Well'
+    ))
 
-# (Dashboard code remains consistent with previous versions)
+    fig.update_layout(scene=dict(zaxis_title='Thickness (m)'), width=900, height=700)
+    st.plotly_chart(fig, use_container_width=True)
+    
+    if not sweet_spots.empty:
+        st.success(f"Found {len(sweet_spots)} wells matching your Sweet Spot criteria!")
+        st.dataframe(sweet_spots[['Well', 'Thickness', 'COT', 'Tmax', 'Ro_calc']])
+    else:
+        st.warning("No wells match the current Sweet Spot criteria. Adjust sliders to expand search.")
+
+# --- 5. Dashboard (Simplified) ---
 elif menu == "Basin Dashboard":
     st.header("Basin Registry & QC")
-    st.dataframe(df.style.background_gradient(subset=['Ro_calc', 'PY'], cmap='YlOrRd'))
+    st.dataframe(df.style.apply(lambda x: ['background-color: #ffcccc' if x.is_sweet_spot else '' for i in x], axis=1))
