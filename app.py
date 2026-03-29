@@ -1520,7 +1520,7 @@ elif menu == "Burial History":
             fill='tozeroy', fillcolor='rgba(255,68,68,0.07)',
             name='BHT', hovertemplate='Age: %{x:.0f} Ma<br>BHT: %{y:.1f}°C<extra></extra>',
         ), row=1, col=2)
-        for thresh, lbl, clr in [(60,'Early Gen','#f0c04088'),(120,'Peak Oil','#00d4aa88'),(150,'Gas Zone','#ff440088')]:
+        for thresh, lbl, clr in [(60,'Early Gen','rgba(240,192,64,0.5)'),(120,'Peak Oil','rgba(0,212,170,0.5)'),(150,'Gas Zone','rgba(255,68,68,0.5)')]:
             fig_bh.add_hline(y=thresh, line_dash='dash', line_color=clr, opacity=0.6,
                              annotation_text=lbl, annotation_position='right',
                              annotation_font=dict(size=9, color=clr), row=1, col=2)
@@ -1744,7 +1744,6 @@ elif menu == "PDF Report":
 <body>
 
 <div class="cover">
-  <div class="cover-logo">⛽</div>
   <div class="cover-title">{report_title}</div>
   <div class="cover-sub">PetroStream Ultra 2.0 · Automated Technical Report</div>
   <div class="cover-meta">
