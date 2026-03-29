@@ -6,8 +6,9 @@ from scipy.interpolate import griddata
 import plotly.graph_objects as go
 import lasio
 import io
+from fpdf import FPDF
 
-# --- 1. App Configuration & Branding ---
+# --- 1. App Configuration ---
 st.set_page_config(page_title="PetroStream Ultra 2.0 | Serhoudji Souhil", layout="wide")
 
 # --- 2. Professional CSS ---
@@ -28,7 +29,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. Dataset Engine (V.14 Stable) ---
+# --- 3. Dataset Engine ---
 @st.cache_data
 def load_v14_data():
     data = {
@@ -48,8 +49,33 @@ def load_v14_data():
 
 df = load_v14_data()
 
-# --- 4. Sidebar Branding ---
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/1032/1032821.png", width=80) # Fixed Logo
+# --- 4. PDF Report Generator Function ---
+def create_pdf(dataframe):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(200, 10, txt="PetroStream Ultra 2.0 - Basin Report", ln=True, align='C')
+    pdf.set_font("Arial", size=10)
+    pdf.cell(200, 10, txt=f"Lead Developer: Serhoudji Souhil", ln=True, align='C')
+    pdf.ln(10)
+    
+    # Add Table Header
+    pdf.set_font("Arial", 'B', 8)
+    cols = ['Well', 'Thickness', 'COT', 'Tmax', 'Ro_calc']
+    for col in cols:
+        pdf.cell(35, 10, col, 1)
+    pdf.ln()
+    
+    # Add Data
+    pdf.set_font("Arial", size=8)
+    for index, row in dataframe.iterrows():
+        for col in cols:
+            pdf.cell(35, 10, str(row[col]), 1)
+        pdf.ln()
+    
+    return pdf.output(dest='S').encode('latin-1')
+
+# --- 5. Sidebar Branding & Export ---
 st.sidebar.title("PetroStream Ultra 2.0")
 st.sidebar.subheader("Serhoudji Souhil")
 st.sidebar.markdown("*Master's Student | Petroleum Geology*")
@@ -58,29 +84,27 @@ st.sidebar.markdown("---")
 menu = st.sidebar.radio("Project Hub", 
     ["Home: Project Overview", "Basin Registry", "Geochemical Analytics", "3D Mapping", "Log Viewer"])
 
-# --- 5. Module: Home (Project Overview) ---
+# PDF Export Button
+st.sidebar.markdown("### 📄 Reporting")
+pdf_data = create_pdf(df)
+st.sidebar.download_button(
+    label="Download Basin PDF Report",
+    data=pdf_data,
+    file_name="SBAA_Basin_Report.pdf",
+    mime="application/pdf"
+)
+
+# --- 6. Modules ---
 if menu == "Home: Project Overview":
     st.title("Project Overview: SBAA Basin Analysis")
-    st.image("https://images.unsplash.com/photo-1581092583537-20d51b4b4f1b?auto=format&fit=crop&q=80&w=1500", use_container_width=True) # Fixed Image
-    
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        st.header("1. Abstract")
-        st.write("""
-        This project focuses on the characterization of the **Upper Devonian source rock** within the **SBAA Basin**. 
-        By integrating Rock-Eval pyrolysis data, stratigraphic thickness measurements, and digital well logs, 
-        **PetroStream Ultra 2.0** provides a high-fidelity environment for evaluating generative potential 
-        and thermal maturity.
-        """)
-    with col2:
-        st.header("2. Methodology")
-        st.info("""
-        - **Maturity:** Jarvie et al. (2007)
-        - **Interpolation:** Cubic Spline
-        - **Log Parsing:** LASIO engine
-        """)
+    st.header("1. Abstract")
+    st.write("""
+    Characterization of the **Upper Devonian source rock** within the **SBAA Basin** using integrated 
+    Rock-Eval and stratigraphic data. Lead Developer: **Serhoudji Souhil**.
+    """)
+    st.header("2. Methodology")
+    st.info("Utilizing Jarvie (2007) maturity modeling and Cubic Spline interpolation.")
 
-# --- 6. Module: Basin Registry ---
 elif menu == "Basin Registry":
     st.title("Integrated Reservoir Registry")
     c1, c2, c3, c4 = st.columns(4)
@@ -90,4 +114,4 @@ elif menu == "Basin Registry":
     c4.metric("Wells", len(df))
     st.dataframe(df.round(2).style.background_gradient(cmap='YlGnBu'), use_container_width=True)
 
-# ... [Rest of the modules (Geochemical, 3D Mapping, Log Viewer) remain as before] ...
+# ... [Geochemical, 3D Mapping, and Log Viewer code remains identical to previous version] ...
