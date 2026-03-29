@@ -50,7 +50,7 @@ def load_v14_data():
 df = load_v14_data()
 
 # --- 4. Sidebar Branding ---
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2843/2843891.png", width=80)
+st.sidebar.image("https://cdn-icons-png.flaticon.com/512/1032/1032821.png", width=80)
 st.sidebar.title("PetroStream Ultra 2.0")
 st.sidebar.subheader("Serhoudji Souhil")
 st.sidebar.markdown("*Master's Student | Petroleum Geology*")
@@ -62,7 +62,7 @@ menu = st.sidebar.radio("Project Hub",
 # --- 5. Module: Home (Project Overview) ---
 if menu == "Home: Project Overview":
     st.title("Project Overview: SBAA Basin Analysis")
-    st.image("https://images.unsplash.com/photo-1518133910546-b6c2fb7d79e3?auto=format&fit=crop&q=80&w=1000", use_container_width=True)
+    st.image("https://images.unsplash.com/photo-1581092583537-20d51b4b4f1b?auto=format&fit=crop&q=80&w=1500", use_container_width=True)
     
     col1, col2 = st.columns([2, 1])
     with col1:
