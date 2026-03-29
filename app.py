@@ -1,3 +1,12 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+PetroStream Ultra 2.0
+SBAA Basin Petroleum Geology Analysis Tool
+Author: Serhoudji Souhil
+MSc Petroleum Geology
+"""
+
 import streamlit as st
 import pandas as pd
 import numpy as np
