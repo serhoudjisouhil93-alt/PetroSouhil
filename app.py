@@ -811,6 +811,7 @@ elif menu == "Geochemical Lab":
         pc = param_colors.get(param, '#f0c040')
 
         if chart_type == "Bar":
+            hover_text = [f"<b>{well}</b><br>{param}: {val:.2f}" for well, val in zip(df['Well'], df[param])]
             fig = go.Figure(go.Bar(
                 x=df['Well'], y=df[param],
                 marker=dict(
@@ -818,26 +819,30 @@ elif menu == "Geochemical Lab":
                     colorscale=[[0,'#101828'],[0.5,pc+'88'],[1,pc]],
                     line=dict(color=pc, width=0.5),
                 ),
-                text=df[param].round(2),
+                text=hover_text,
                 textposition='outside',
                 textfont=dict(family='Share Tech Mono', size=9, color='#8a9ab5'),
-                hovertemplate=f'<b>%{{x}}</b><br>{param}: %{{y:.2f}}<extra></extra>',
+                hovertemplate='%{text}<extra></extra>',
             ))
         elif chart_type == "Violin":
+            hover_text = [f"{param}: {val:.2f}" for val in df[param]]
             fig = go.Figure(go.Violin(
                 y=df[param], points='all',
                 pointpos=0, jitter=0.3,
                 line_color=pc, fillcolor=pc+'22',
                 marker=dict(color=pc, size=8),
-                hovertemplate=f'{param}: %{{y:.2f}}<extra></extra>',
+                hovertemplate='%{text}<extra></extra>',
+                text=hover_text,
             ))
         else:
+            hover_text = [f"{param}: {val:.2f}" for val in df[param]]
             fig = go.Figure(go.Box(
                 y=df[param], points='all',
                 marker=dict(color=pc, size=8),
                 line=dict(color=pc),
                 fillcolor=pc+'22',
-                hovertemplate=f'{param}: %{{y:.2f}}<extra></extra>',
+                hovertemplate='%{text}<extra></extra>',
+                text=hover_text,
             ))
 
         apply_theme(fig, title=f"{param} — All Wells", height=420, extra=dict(yaxis_title=param))
@@ -904,6 +909,7 @@ elif menu == "Geochemical Lab":
         df_ranked.index += 1
         df_ranked.insert(0,'Rank',df_ranked.index)
 
+        hover_text = [f"<b>{well}</b><br>{rank_by}: {val:.2f}" for well, val in zip(df_ranked['Well'], df_ranked[rank_by])]
         fig_rank = go.Figure(go.Bar(
             x=df_ranked[rank_by], y=df_ranked['Well'],
             orientation='h',
@@ -912,10 +918,10 @@ elif menu == "Geochemical Lab":
                 colorscale=[[0,'#1a2540'],[0.5,'#c8982a'],[1,'#f0c040']],
                 line=dict(color='#f0c040', width=0.3),
             ),
-            text=df_ranked[rank_by].round(2),
+            text=hover_text,
             textposition='outside',
             textfont=dict(family='Share Tech Mono', size=10),
-            hovertemplate=f'<b>%{{y}}</b><br>{rank_by}: %{{x:.2f}}<extra></extra>',
+            hovertemplate='%{text}<extra></extra>',
         ))
         apply_theme(fig_rank, title=f"Well Ranking by {rank_by}", height=380, extra=dict(
             xaxis_title=rank_by, yaxis_autorange='reversed',
@@ -963,7 +969,8 @@ elif menu == "3D Mapping":
                 lighting=dict(ambient=0.6, diffuse=0.8, specular=0.3),
                 colorbar=dict(title=param_3d, tickfont=dict(color='#8a9ab5', size=10),
                               bgcolor='rgba(8,14,26,0.8)', bordercolor='#1a2540'),
-                hovertemplate=f'E: %{{x:.1f}}<br>N: %{{y:.1f}}<br>{param_3d}: %{{z:.2f}}<extra></extra>',
+                hovertemplate='E: %{x:.1f}<br>N: %{y:.1f}<br>%{z:.2f}<extra></extra>',
+            customdata=[param_3d] * len(xi),
             ))
             # Add well scatter
             fig_surf.add_trace(go.Scatter3d(
@@ -974,7 +981,7 @@ elif menu == "3D Mapping":
                 text=df['Well'],
                 textfont=dict(size=9, color='#f0c040'),
                 name='Wells',
-                hovertemplate=f'<b>%{{text}}</b><br>{param_3d}: %{{z:.2f}}<extra></extra>',
+                hovertemplate='<b>%{text}</b><br>%{z:.2f}<extra></extra>',
             ))
             fig_surf.update_layout(
                 paper_bgcolor='#0c1424',
@@ -1009,7 +1016,8 @@ elif menu == "3D Mapping":
                 line_smoothing=0.85,
                 colorbar=dict(title=param_3d, tickfont=dict(color='#8a9ab5',size=10),
                               bgcolor='rgba(8,14,26,0.8)', bordercolor='#1a2540'),
-                hovertemplate=f'E: %{{x:.1f}}<br>N: %{{y:.1f}}<br>{param_3d}: %{{z:.2f}}<extra></extra>',
+                hovertemplate='E: %{x:.1f}<br>N: %{y:.1f}<br>%{z:.2f}<extra></extra>',
+            customdata=[param_3d] * len(xi),
             ))
             fig_cont.add_trace(go.Scatter(
                 x=df['X'], y=df['Y'],
@@ -1220,14 +1228,14 @@ elif menu == "Log Viewer":
                     line=dict(color=meta['color'], width=1),
                     fill='tozerox', fillcolor=meta['color']+'22',
                     name=log_name,
-                    hovertemplate=f"{log_name}: %{{x:.2f}} {meta['unit']}<br>Depth: %{{y:.0f}}m<extra></extra>",
+                    hovertemplate=f'{log_name}: %{{x:.2f}} {meta["unit"]}<br>Depth: %{{y:.0f}}m<extra></extra>',
                 ), row=1, col=col_num)
             else:
                 fig_log.add_trace(go.Scatter(
                     x=vals, y=depth, mode='lines',
                     line=dict(color=meta['color'], width=1.2),
                     name=log_name,
-                    hovertemplate=f"{log_name}: %{{x:.2f}} {meta['unit']}<br>Depth: %{{y:.0f}}m<extra></extra>",
+                    hovertemplate=f'{log_name}: %{{x:.2f}} {meta["unit"]}<br>Depth: %{{y:.0f}}m<extra></extra>',
                 ), row=1, col=col_num)
 
             axis_key = 'xaxis' if col_num == 1 else f'xaxis{col_num}'
