@@ -816,7 +816,7 @@ elif menu == "Geochemical Lab":
                 x=df['Well'], y=df[param],
                 marker=dict(
                     color=df[param],
-                    colorscale=[[0,'#101828'],[0.5,pc+'88'],[1,pc]],
+                    colorscale=[[0, '#101828'], [0.5, pc], [1, pc]],
                     line=dict(color=pc, width=0.5),
                 ),
                 text=hover_text,
@@ -970,7 +970,6 @@ elif menu == "3D Mapping":
                 colorbar=dict(title=param_3d, tickfont=dict(color='#8a9ab5', size=10),
                               bgcolor='rgba(8,14,26,0.8)', bordercolor='#1a2540'),
                 hovertemplate='E: %{x:.1f}<br>N: %{y:.1f}<br>%{z:.2f}<extra></extra>',
-            customdata=[param_3d] * len(xi),
             ))
             # Add well scatter
             fig_surf.add_trace(go.Scatter3d(
@@ -1017,7 +1016,6 @@ elif menu == "3D Mapping":
                 colorbar=dict(title=param_3d, tickfont=dict(color='#8a9ab5',size=10),
                               bgcolor='rgba(8,14,26,0.8)', bordercolor='#1a2540'),
                 hovertemplate='E: %{x:.1f}<br>N: %{y:.1f}<br>%{z:.2f}<extra></extra>',
-            customdata=[param_3d] * len(xi),
             ))
             fig_cont.add_trace(go.Scatter(
                 x=df['X'], y=df['Y'],
@@ -1228,14 +1226,14 @@ elif menu == "Log Viewer":
                     line=dict(color=meta['color'], width=1),
                     fill='tozerox', fillcolor=meta['color']+'22',
                     name=log_name,
-                    hovertemplate=f'{log_name}: %{{x:.2f}} {meta["unit"]}<br>Depth: %{{y:.0f}}m<extra></extra>',
+                    hovertemplate=f"{log_name}: %{{x:.2f}} {meta['unit']}<br>Depth: %{{y:.0f}}m<extra></extra>",
                 ), row=1, col=col_num)
             else:
                 fig_log.add_trace(go.Scatter(
                     x=vals, y=depth, mode='lines',
                     line=dict(color=meta['color'], width=1.2),
                     name=log_name,
-                    hovertemplate=f'{log_name}: %{{x:.2f}} {meta["unit"]}<br>Depth: %{{y:.0f}}m<extra></extra>',
+                    hovertemplate=f"{log_name}: %{{x:.2f}} {meta['unit']}<br>Depth: %{{y:.0f}}m<extra></extra>",
                 ), row=1, col=col_num)
 
             axis_key = 'xaxis' if col_num == 1 else f'xaxis{col_num}'
