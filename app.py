@@ -565,7 +565,7 @@ def generate_csv_report(dataframe):
 # ═══════════════════════════════════════════════════════════════
 st.sidebar.markdown("""
 <div class="sidebar-logo">
-    <div class="logo-title">⛽ PetroStream</div>
+    <div class="logo-title"> PetroStream</div>
     <div class="logo-version">ULTRA 2.0 · SBAA BASIN</div>
     <div class="logo-author">Serhoudji Souhil · MSc Petroleum Geology</div>
 </div>
@@ -574,15 +574,15 @@ st.sidebar.markdown("""
 st.sidebar.markdown('<div class="sidebar-section">Navigation</div>', unsafe_allow_html=True)
 
 NAV_ICONS = {
-    "🏠  Overview":            "Overview",
-    "📊  Basin Registry":      "Basin Registry",
-    "🧪  Geochemical Lab":     "Geochemical Lab",
-    "🗺️  3D Mapping":          "3D Mapping",
-    "📈  Cross-Plots":         "Cross-Plots",
-    "🔩  Log Viewer":          "Log Viewer",
-    "💎  Resource Estimation": "Resource Estimation",
-    "⏳  Burial History":      "Burial History",
-    "📄  PDF Report":          "PDF Report",
+    "  Overview":            "Overview",
+    "  Basin Registry":      "Basin Registry",
+    "  Geochemical Lab":     "Geochemical Lab",
+    "  3D Mapping":          "3D Mapping",
+    "  Cross-Plots":         "Cross-Plots",
+    "  Log Viewer":          "Log Viewer",
+    "  Resource Estimation": "Resource Estimation",
+    "  Burial History":      "Burial History",
+    "  PDF Report":          "PDF Report",
 }
 menu_label = st.sidebar.radio("", list(NAV_ICONS.keys()), label_visibility="collapsed")
 menu = NAV_ICONS[menu_label]
@@ -795,7 +795,7 @@ elif menu == "Geochemical Lab":
     </div>
     """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["📊  Distribution Analysis", "🔥  Thermal Maturity", "📉  Ranking"])
+    tab1, tab2, tab3 = st.tabs(["  Distribution Analysis", "  Thermal Maturity", "  Ranking"])
 
     with tab1:
         cols_params = st.columns([1,2])
@@ -826,21 +826,25 @@ elif menu == "Geochemical Lab":
             ))
         elif chart_type == "Violin":
             hover_text = [f"{param}: {val:.2f}" for val in df[param]]
+            # Convert hex to rgba for fillcolor transparency
+            pc_rgba = f'rgba({int(pc[1:3],16)},{int(pc[3:5],16)},{int(pc[5:7],16)},0.13)'
             fig = go.Figure(go.Violin(
                 y=df[param], points='all',
                 pointpos=0, jitter=0.3,
-                line_color=pc, fillcolor=pc+'22',
+                line_color=pc, fillcolor=pc_rgba,
                 marker=dict(color=pc, size=8),
                 hovertemplate='%{text}<extra></extra>',
                 text=hover_text,
             ))
         else:
             hover_text = [f"{param}: {val:.2f}" for val in df[param]]
+            # Convert hex to rgba for fillcolor transparency
+            pc_rgba = f'rgba({int(pc[1:3],16)},{int(pc[3:5],16)},{int(pc[5:7],16)},0.13)'
             fig = go.Figure(go.Box(
                 y=df[param], points='all',
                 marker=dict(color=pc, size=8),
                 line=dict(color=pc),
-                fillcolor=pc+'22',
+                fillcolor=pc_rgba,
                 hovertemplate='%{text}<extra></extra>',
                 text=hover_text,
             ))
@@ -1053,7 +1057,7 @@ elif menu == "Cross-Plots":
     with cp2: y_param = st.selectbox("Y Axis", params, index=1)
     with cp3: size_p  = st.selectbox("Bubble Size", params, index=2)
 
-    tab_a, tab_b, tab_c = st.tabs(["🔵  Bubble Cross-Plot", "🔺  Van Krevelen Diagram", "🌈  Correlation Matrix"])
+    tab_a, tab_b, tab_c = st.tabs(["  Bubble Cross-Plot", "  Van Krevelen Diagram", "  Correlation Matrix"])
 
     with tab_a:
         fig_cp = go.Figure()
@@ -1221,10 +1225,14 @@ elif menu == "Log Viewer":
             col_num = i + 1
 
             if meta['fill']:
+                # Convert hex to rgba for transparency
+                hex_color = meta['color'].lstrip('#')
+                r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+                rgba_color = f'rgba({r},{g},{b},0.13)'
                 fig_log.add_trace(go.Scatter(
                     x=vals, y=depth, mode='lines',
                     line=dict(color=meta['color'], width=1),
-                    fill='tozerox', fillcolor=meta['color']+'22',
+                    fill='tozerox', fillcolor=rgba_color,
                     name=log_name,
                     hovertemplate=f"{log_name}: %{{x:.2f}} {meta['unit']}<br>Depth: %{{y:.0f}}m<extra></extra>",
                 ), row=1, col=col_num)
@@ -1307,7 +1315,7 @@ elif menu == "Resource Estimation":
     <div style="background:rgba(240,192,64,0.06);border:1px solid #8a6510;border-left:3px solid #f0c040;
                 border-radius:4px;padding:12px 16px;margin-bottom:1.5rem;
                 font-family:'Barlow Condensed',sans-serif;font-size:0.95rem;color:#8a9ab5;">
-    ⚡ <strong style="color:#f0c040;">Methodology:</strong>
+     <strong style="color:#f0c040;">Methodology:</strong>
     Shale Oil-in-Place (OOIP) via modified Jarvie (2012) formula. 
     Gas-in-Place (OGIP) via Langmuir adsorption model.
     Adjust parameters below and results update live.
@@ -1774,11 +1782,11 @@ elif menu == "PDF Report":
 </html>"""
 
         # Show live preview in expander
-        with st.expander("🔍  Live HTML Preview (scroll to inspect)", expanded=True):
+        with st.expander("  Live HTML Preview (scroll to inspect)", expanded=True):
             st.components.v1.html(html_report, height=600, scrolling=True)
 
         if generate_btn:
-            st.success("✅ Report ready — click Download below")
+            st.success(" Report ready — click Download below")
 
         st.download_button(
             label="⬇  Download HTML Report",
@@ -1792,7 +1800,7 @@ elif menu == "PDF Report":
         <div style="background:rgba(0,212,170,0.06);border:1px solid #005a46;border-left:3px solid #00d4aa;
                     border-radius:4px;padding:10px 14px;margin-top:12px;
                     font-family:'Barlow Condensed',sans-serif;font-size:0.85rem;color:#8a9ab5;">
-        💡 <strong style="color:#00d4aa;">Tip:</strong>
+         <strong style="color:#00d4aa;">Tip:</strong>
         Open the downloaded .html file in any browser and use <strong>File → Print → Save as PDF</strong>
         for a pixel-perfect PDF with the dark theme preserved.
         </div>
