@@ -3,85 +3,120 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
-from fpdf import FPDF
 import io
 
-# 1. Page Configuration
+# --- 1. App Configuration ---
 st.set_page_config(page_title="PetroStream Ultra", layout="wide")
 
-# 2. Professional Styling (CSS)
+# --- 2. Professional UI Styling ---
 st.markdown("""
     <style>
-    .main { background-color: #f4f7f6; }
-    [data-testid="stMetricValue"] { font-size: 24px; color: #004c6d; }
-    .stButton>button { width: 100%; background-color: #004c6d; color: white; }
+    .main { background-color: #f8f9fa; }
+    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 5px; border: 1px solid #dee2e6; }
+    h1, h2, h3 { color: #002b36; font-family: 'Arial'; }
+    .stButton>button { background-color: #004c6d; color: white; border-radius: 5px; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Data Loading (V.14 SBAA Dataset)
-@st.cache_data
+# --- 3. Sidebar: Data Management ---
+st.sidebar.title("PetroStream Ultra")
+st.sidebar.subheader("Data Management")
+
+# --- NEW: Download Demo Template Feature ---
+demo_data = """Well,X,Y,Thickness,COT,S2,Tmax
+SBAA-1,10,50,70,1.44,4.39,446
+DECH-1,25,65,68,2.65,16.04,440
+OTLA-1,15,55,54,1.49,6.91,437
+BDW-1,35,75,48,0.57,2.04,460
+ODZ-1,30,70,185,5.74,4.06,445
+OTRT-1,5,45,188,0.97,0.79,452
+LT-1bis,12,48,173,0.61,0.43,443
+MGR-1,20,52,253,0.71,1.88,454"""
+
+st.sidebar.download_button(
+    label="Download Demo CSV Template",
+    data=demo_data,
+    file_name="petrostream_template.csv",
+    mime="text/csv"
+)
+
+st.sidebar.markdown("---")
+uploaded_file = st.sidebar.file_uploader("Upload Your Basin Data", type=["csv", "xlsx"])
+
+# Function to load data
 def load_data():
-    data = {
-        'Well': ['SBAA-1', 'DECH-1', 'OTLA-1', 'BDW-1', 'ODZ-1', 'OTRT-1', 'LT-1bis', 'MGR-1'],
-        'X': [10, 25, 15, 35, 30, 5, 12, 20],  # Example UTM-style Coords
-        'Y': [50, 65, 55, 75, 70, 45, 48, 52],
-        'Thickness': [70, 68, 54, 48, 185, 188, 173, 253],
-        'COT': [1.44, 2.65, 1.49, 0.57, 5.74, 0.97, 0.61, 0.71],
-        'S2': [4.39, 16.04, 6.91, 2.04, 4.06, 0.79, 0.43, 1.88],
-        'Tmax': [446, 440, 437, 460, 445, 452, 443, 454]
-    }
-    df = pd.DataFrame(data)
-    df['HI'] = (df['S2'] / df['COT']) * 100
-    return df
+    if uploaded_file is not None:
+        try:
+            if uploaded_file.name.endswith('.csv'):
+                return pd.read_csv(uploaded_file)
+            else:
+                return pd.read_excel(uploaded_file)
+        except Exception as e:
+            st.error(f"Error loading file: {e}")
+            return None
+    else:
+        # Fallback to internal demo data
+        return pd.read_csv(io.StringIO(demo_data))
 
 df = load_data()
 
-# 4. Navigation Sidebar
-st.sidebar.title("PetroStream Ultra")
-menu = st.sidebar.radio("Navigation", ["Dashboard", "Geochemical Plots", "Isopach Map"])
+if df is not None:
+    # Calculations
+    df['HI'] = (df['S2'] / df['COT']) * 100
 
-# 5. Dashboard Module
-if menu == "Dashboard":
-    st.header("Basin Executive Summary")
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Avg TOC", f"{df['COT'].mean():.2f}%")
-    c2.metric("Max Thickness", f"{df['Thickness'].max()}m")
-    c3.metric("Maturity", "Oil Window")
-    c4.metric("Status", "V.14 Stable")
-    
-    st.subheader("Raw Geological Data")
-    st.dataframe(df, use_container_width=True)
+    # --- 4. Navigation ---
+    menu = st.sidebar.radio("Analysis Modules", ["Executive Summary", "Geochemical Cards", "Isopach Interpolation"])
 
-# 6. Geochemical Module
-elif menu == "Geochemical Plots":
-    st.header("Source Rock Analytics")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write("### TOC vs S2 (Potential)")
-        fig, ax = plt.subplots()
-        ax.scatter(df['COT'], df['S2'], c='#004c6d', edgecolors='white')
-        ax.set_xlabel("TOC (%)"); ax.set_ylabel("S2 (mg HC/g)")
+    # --- 5. Module: Executive Summary ---
+    if menu == "Executive Summary":
+        st.header("SBAA Basin Overview")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Average TOC", f"{df['COT'].mean():.2f}%")
+        m2.metric("Max Thickness", f"{df['Thickness'].max()} m")
+        m3.metric("Well Count", len(df))
+        
+        st.subheader("Active Reservoir Dataset")
+        st.dataframe(df, use_container_width=True)
+
+    # --- 6. Module: Geochemical Cards ---
+    elif menu == "Geochemical Cards":
+        st.header("Source Rock Analytics")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("### Generative Potential (TOC vs S2)")
+            fig, ax = plt.subplots()
+            ax.scatter(df['COT'], df['S2'], c='#004c6d', s=100, edgecolors='white', alpha=0.8)
+            ax.set_xlabel("TOC (%)"); ax.set_ylabel("S2 (mg HC/g rock)")
+            ax.grid(True, linestyle=':', alpha=0.6)
+            st.pyplot(fig)
+
+        with col2:
+            st.write("### Thermal Maturity (HI vs Tmax)")
+            fig, ax = plt.subplots()
+            ax.scatter(df['Tmax'], df['HI'], c='#d4a017', s=100, edgecolors='black')
+            ax.axvline(435, color='red', linestyle='--', label='Oil Window')
+            ax.set_xlabel("Tmax (°C)"); ax.set_ylabel("HI (mg HC/g TOC)")
+            ax.grid(True, linestyle=':', alpha=0.6)
+            st.pyplot(fig)
+
+    # --- 7. Module: Isopach Interpolation ---
+    elif menu == "Isopach Interpolation":
+        st.header("Advanced Isopach Mapping")
+        
+        xi = np.linspace(df.X.min()-5, df.X.max()+5, 100)
+        yi = np.linspace(df.Y.min()-5, df.Y.max()+5, 100)
+        xi, yi = np.meshgrid(xi, yi)
+        zi = griddata((df.X, df.Y), df.Thickness, (xi, yi), method='cubic')
+
+        fig, ax = plt.subplots(figsize=(10, 8))
+        contour = ax.contourf(xi, yi, zi, levels=15, cmap='viridis')
+        plt.colorbar(contour, label='Thickness (m)')
+        ax.scatter(df.X, df.Y, c='white', marker='^', edgecolors='black', s=150)
+        
+        for i, txt in enumerate(df.Well):
+            ax.annotate(txt, (df.X[i], df.Y[i]), fontsize=10, fontweight='bold', xytext=(5,5), textcoords='offset points')
+        
         st.pyplot(fig)
-
-    with col2:
-        st.write("### HI vs Tmax (Maturity)")
-        fig, ax = plt.subplots()
-        ax.scatter(df['Tmax'], df['HI'], c='#d4a017', edgecolors='black')
-        ax.axvline(435, color='red', linestyle='--')
-        ax.set_xlabel("Tmax (°C)"); ax.set_ylabel("HI")
-        st.pyplot(fig)
-
-# 7. Isopach Mapping Module
-elif menu == "Isopach Map":
-    st.header("Lithostratigraphic Interpolation")
-    grid_x, grid_y = np.mgrid[df.X.min()-5:df.X.max()+5:100j, df.Y.min()-5:df.Y.max()+5:100j]
-    grid_z = griddata(df[['X', 'Y']].values, df['Thickness'].values, (grid_x, grid_y), method='cubic')
-
-    fig, ax = plt.subplots(figsize=(10, 8))
-    cp = ax.contourf(grid_x, grid_y, grid_z, levels=15, cmap='viridis')
-    plt.colorbar(cp, label='Thickness (m)')
-    ax.scatter(df['X'], df['Y'], c='white', edgecolors='black', marker='^', s=100)
-    for i, txt in enumerate(df['Well']):
-        ax.annotate(txt, (df['X'][i], df['Y'][i]), fontsize=9)
-    st.pyplot(fig)
+else:
+    st.warning("Please upload a valid data file to begin analysis.")
