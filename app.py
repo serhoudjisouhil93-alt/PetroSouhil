@@ -1,12 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-PetroStream Ultra 2.0
-SBAA Basin Petroleum Geology Analysis Tool
-Author: Serhoudji Souhil
-MSc Petroleum Geology
-"""
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -830,7 +821,7 @@ elif menu == "Geochemical Lab":
                 text=df[param].round(2),
                 textposition='outside',
                 textfont=dict(family='Share Tech Mono', size=9, color='#8a9ab5'),
-                hovertemplate='<b>%{x}</b><br>' + param + ': %{y:.2f}<extra></extra>',
+                hovertemplate=f'<b>%{{x}}</b><br>{param}: %{{y:.2f}}<extra></extra>',
             ))
         elif chart_type == "Violin":
             fig = go.Figure(go.Violin(
@@ -838,7 +829,7 @@ elif menu == "Geochemical Lab":
                 pointpos=0, jitter=0.3,
                 line_color=pc, fillcolor=pc+'22',
                 marker=dict(color=pc, size=8),
-                hovertemplate=param + ': %{y:.2f}<extra></extra>',
+                hovertemplate=f'{param}: %{{y:.2f}}<extra></extra>',
             ))
         else:
             fig = go.Figure(go.Box(
@@ -846,7 +837,7 @@ elif menu == "Geochemical Lab":
                 marker=dict(color=pc, size=8),
                 line=dict(color=pc),
                 fillcolor=pc+'22',
-                hovertemplate=param + ': %{y:.2f}<extra></extra>',
+                hovertemplate=f'{param}: %{{y:.2f}}<extra></extra>',
             ))
 
         apply_theme(fig, title=f"{param} — All Wells", height=420, extra=dict(yaxis_title=param))
@@ -924,7 +915,7 @@ elif menu == "Geochemical Lab":
             text=df_ranked[rank_by].round(2),
             textposition='outside',
             textfont=dict(family='Share Tech Mono', size=10),
-            hovertemplate='<b>%{y}</b><br>' + rank_by + ': %{x:.2f}<extra></extra>',
+            hovertemplate=f'<b>%{{y}}</b><br>{rank_by}: %{{x:.2f}}<extra></extra>',
         ))
         apply_theme(fig_rank, title=f"Well Ranking by {rank_by}", height=380, extra=dict(
             xaxis_title=rank_by, yaxis_autorange='reversed',
@@ -972,7 +963,7 @@ elif menu == "3D Mapping":
                 lighting=dict(ambient=0.6, diffuse=0.8, specular=0.3),
                 colorbar=dict(title=param_3d, tickfont=dict(color='#8a9ab5', size=10),
                               bgcolor='rgba(8,14,26,0.8)', bordercolor='#1a2540'),
-                hovertemplate='E: %{x:.1f}<br>N: %{y:.1f}<br>' + param_3d + ': %{z:.2f}<extra></extra>',
+                hovertemplate=f'E: %{{x:.1f}}<br>N: %{{y:.1f}}<br>{param_3d}: %{{z:.2f}}<extra></extra>',
             ))
             # Add well scatter
             fig_surf.add_trace(go.Scatter3d(
@@ -983,7 +974,7 @@ elif menu == "3D Mapping":
                 text=df['Well'],
                 textfont=dict(size=9, color='#f0c040'),
                 name='Wells',
-                hovertemplate='<b>%{text}</b><br>' + param_3d + ': %{z:.2f}<extra></extra>',
+                hovertemplate=f'<b>%{{text}}</b><br>{param_3d}: %{{z:.2f}}<extra></extra>',
             ))
             fig_surf.update_layout(
                 paper_bgcolor='#0c1424',
@@ -1018,7 +1009,7 @@ elif menu == "3D Mapping":
                 line_smoothing=0.85,
                 colorbar=dict(title=param_3d, tickfont=dict(color='#8a9ab5',size=10),
                               bgcolor='rgba(8,14,26,0.8)', bordercolor='#1a2540'),
-                hovertemplate='E: %{x:.1f}<br>N: %{y:.1f}<br>' + param_3d + ': %{z:.2f}<extra></extra>',
+                hovertemplate=f'E: %{{x:.1f}}<br>N: %{{y:.1f}}<br>{param_3d}: %{{z:.2f}}<extra></extra>',
             ))
             fig_cont.add_trace(go.Scatter(
                 x=df['X'], y=df['Y'],
@@ -1781,7 +1772,7 @@ elif menu == "PDF Report":
             st.components.v1.html(html_report, height=600, scrolling=True)
 
         if generate_btn:
-            st.success(" Report ready — click Download below")
+            st.success("✅ Report ready — click Download below")
 
         st.download_button(
             label="⬇  Download HTML Report",
@@ -1795,7 +1786,7 @@ elif menu == "PDF Report":
         <div style="background:rgba(0,212,170,0.06);border:1px solid #005a46;border-left:3px solid #00d4aa;
                     border-radius:4px;padding:10px 14px;margin-top:12px;
                     font-family:'Barlow Condensed',sans-serif;font-size:0.85rem;color:#8a9ab5;">
-         <strong style="color:#00d4aa;">Tip:</strong>
+        💡 <strong style="color:#00d4aa;">Tip:</strong>
         Open the downloaded .html file in any browser and use <strong>File → Print → Save as PDF</strong>
         for a pixel-perfect PDF with the dark theme preserved.
         </div>
